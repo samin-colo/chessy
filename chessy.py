@@ -1,86 +1,57 @@
 import chess
 import time
 import random
+from piece_square_tables import pos_value
 from IPython.display import display, HTML, clear_output
 
-count = 0
+t = 0
 b = chess.Board()
 
 def evaluate(board):
     score = 0
+    if board.is_checkmate():
+        score  = 2*int(board.turn)-1
+        score *= -float("inf")
+        return score
     for (piece, weight) in [
-            (chess.KING,20),
-            (chess.QUEEN,10),
-            (chess.ROOK,5),
-            (chess.KNIGHT,3),
-            (chess.BISHOP,3),
-            (chess.PAWN,1)]:
-        num_w = len(board.pieces(piece,board.turn))
-        num_b = len(board.pieces(piece,not board.turn))
-        score += weight*(num_w - num_b)
+            (chess.KING,20000),
+            (chess.QUEEN,1000),
+            (chess.ROOK,500),
+            (chess.KNIGHT,300),
+            (chess.BISHOP,400),
+            (chess.PAWN,100)]:
+        p_w    = board.pieces(piece, chess.WHITE)
+        p_b    = board.pieces(piece, chess.BLACK)
+        score += weight*(len(p_w) - len(p_b))
+        score += pos_value[piece][list(p_w)].sum()
+        score += pos_value[-1*piece][list(p_b)].sum()
     return score
 
-def minimax(board, depth, max_level, alpha, beta):
-    if board.is_game_over(claim_draw=True) or (depth == 0):
-        return evaluate(board)
-    if max_level:
-        for move in board.legal_moves:
-            board.push(move)
-            score = minimax(board,depth-1, not max_level, alpha, beta)
-            board.pop()
-            if score >= beta:
-                return beta
-            if score > alpha:
-                alpha = score
-        return alpha
-    else:
-        for move in board.legal_moves:
-            board.push(move)
-            score = minimax(board, depth-1, not max_level, alpha, beta)
-            board.pop()
-            if score <= alpha:
-                return alpha
-            if score < beta:
-                beta = score
-        return beta
-
-def negamax(board, depth, a, b, c):
-    if board.is_game_over() or (depth == 0):
-        return "None", c*evaluate(board)
+def negamax(board, depth, alpha, beta, s):
+    global t
+    color = 2*int(board.turn)-1
+    t     = time.time()-s
+    if board.is_game_over() or (depth == 0) or t>120:
+        return None, color*evaluate(board)
     best_score = -float("inf")
     best_move  = None
     for move in board.legal_moves:
-        global count
-        count += 1
         board.push(move)
-        _, score = negamax(board, depth-1, -b, -a, -c)
+        _, score = negamax(board, depth-1, -beta, -alpha, s)
         score = -score
         board.pop()
         if score > best_score:
             best_score = score
             best_move  = move
-        a = max(a, best_score)
-        if a >= b:
+        alpha = max(alpha, best_score)
+        if alpha >= beta:
             break
     return best_move, best_score
 
 def negamax_player(board):
-    color    = 1 if board.turn else -1
-    move, _  = negamax(board, 4, -float("inf"), float("inf"), color)
+    s        = time.time()
+    move, _  = negamax(board, 4, -float("inf"), float("inf"), s)
     return move.uci()
-
-def ab_player(board):
-    depth        = 3
-    choice       = None
-    highest_seen = -float("inf")
-    for move in board.legal_moves:
-        board.push(move)
-        score = minimax(board,depth, True, -float("inf"),float("inf"))
-        board.pop()
-        if score > highest_seen:
-            highest_seen = score
-            choice = move.uci()
-    return choice
 
 def human_player(board):
     prompt = "Your move [q to quit]: "
@@ -115,6 +86,6 @@ def play(p1, p2):
     if b.is_checkmate():
         print("Checkmate: {} wins!".format(
             "WHITE" if not b.turn else "BLACK"))
-    elif b.is_variant_draw():
+    else:
         print("DRAW")
 
